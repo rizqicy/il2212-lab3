@@ -48,7 +48,7 @@ void writeToken(queue_t *ch, char data) {
 
 void actor11SDF(uint16_t consum, uint16_t prod,
                 queue_t* ch_in, queue_t* ch_out,
-                void (*f) (char*, char*, uint8_t, uint8_t), uint8_t w, uint8_t h)
+                void (*f) (char*, char*))
 {
     char input[consum], output[prod];
     uint16_t i;
@@ -56,37 +56,39 @@ void actor11SDF(uint16_t consum, uint16_t prod,
     for(i = 0; i < consum; i++) {
         readToken(ch_in, &input[i]);
     }
-    f(input, output, w, h);
+    f(input, output);
     for(i = 0; i< prod; i++) {	 
         writeToken(ch_out, output[i]);
     }
 }
 
 
-void wrapImageRGB(char* in, vect_handle_t vec_out, uint8_t w, uint8_t h){
-    vect_handle_t temp;
+void wrapImageRGB(char* in, vect_handle_t vec_out){
+    vect_handle_t vT;
 
-    for(uint8_t i = 0; i < h; i++){
+    for(uint8_t i = 0; i < (vec_out->len); i++){
         //printf("h=%d | ", i);
-        for(uint8_t j = 0; j < w; j++){
-            uint16_t idx = (i * w + j)*3;
+        vT = (vect_t *) vect_read(vec_out, i);
+        for(uint8_t j = 0; j < (vT->len); j++){
+            uint16_t idx = (i * (vT->len) + j)*3;
             pixel_t p = {in[idx], in[idx+1], in[idx+2]};
-            vect_write(&((vect_t *) vec_out->data)[i], j, &p);
+            vect_write(vT, j, &p);
             //printf("%d,%d,%d\t",p.r,p.g,p.b);
         }
         //printf("\n");
     }
 }
 
-void wrapImageGRY(char* in, vect_handle_t vec_out, uint8_t w, uint8_t h){
-    vect_handle_t temp;
+void wrapImageGRY(char* in, vect_handle_t vec_out){
+    vect_handle_t vT;
 
-    for(uint8_t i = 0; i < h; i++){
+    for(uint8_t i = 0; i < (vec_out->len); i++){
         //printf("h=%d | ", i);
-        for(uint8_t j = 0; j < w; j++){
-            uint16_t idx = i*w + j;
+        vT = (vect_t *) vect_read(vec_out, i);
+        for(uint8_t j = 0; j < (vT->len); j++){
+            uint16_t idx = i* (vT->len) + j;
             //printf("i=%d,%.1f\t",idx, in[i*w+j]);
-            vect_write(&((vect_t *) vec_out->data)[i], j, &in[i*w + j]);
+            vect_write(vT, j, &in[idx]);
         }
         //printf("\n");
     }
@@ -165,10 +167,10 @@ grayscale = mapMatrix (convert . fromVector) . mapV (groupV 3)
                     + fromIntegral b * 0.125
     convert _ = error "X length is not a multiple of 3"
 */
-void f_grayscale(char* in, char* out, uint8_t w, uint8_t h) {
+void f_grayscale(char* in, char* out) {
     // read data stream to matrix
     //vect_t image = createMatrix_pixel(in, w, h);
-    wrapImageRGB(in, &mRGB, w, h);
+    wrapImageRGB(in, &mRGB);
 
     // mapMatrix operation with grayscale function on each element
     //vect_t grayImage = mapV(&image,f_gray); 
@@ -198,11 +200,11 @@ toAsciiArt = mapMatrix num2char
     level n = truncate $ nLevels * (n / 255)
     nLevels = fromIntegral $ length asciiLevels - 1
 */
-void f_ascii(char* in, char* out, uint8_t w, uint8_t h) {
+void f_ascii(char* in, char* out) {
 
     // read data stream to matrix
     //vect_t grayImage = createMatrix_gry(in, w, h);
-    wrapImageGRY(in, &mRSZ2, w, h);
+    wrapImageGRY(in, &mRSZ2);
 
     // mapMatrix operation with convert_ascii function on each element
     //vect_t asciiImage = mapMatrix(&grayImage, convert_ascii); 
@@ -234,10 +236,10 @@ resize = mapMatrix (/ 4) . sumRows . sumCols
     sumCols = mapV (mapV (reduceV (+)) . groupV 2)
     sumRows = mapV (reduceV (zipWithV (+))) . groupV 2
 */
-void f_resize(char* in, char* out, uint8_t w, uint8_t h){
+void f_resize(char* in, char* out){
 
     static char sum = 0;
-    wrapImageGRY(in, &mGRY2, w, h);
+    wrapImageGRY(in, &mGRY2);
 
     mapMatrix(&mGRY2, &mGRY2, div_4);
     
@@ -335,11 +337,11 @@ int main()
         }
 
         /* graySDF actor */
-        actor11SDF(3*w*h, w*h, &s_in, &s_1, f_grayscale, w, h);
+        actor11SDF(3*w*h, w*h, &s_in, &s_1, f_grayscale);
         /* resizeSDF actor*/
-        actor11SDF(w*h, w*h/4, &s_1, &s_2, f_resize, w, h);
+        actor11SDF(w*h, w*h/4, &s_1, &s_2, f_resize);
         /* asciiSDF actor */
-        actor11SDF(w*h/4, w*h/4, &s_2, &s_out, f_ascii, w/2, h/2);
+        actor11SDF(w*h/4, w*h/4, &s_2, &s_out, f_ascii);
 
         tStop = time_us_32();
         // printf("T diff=%.3f\n", tStop, (tStop-tStart)/1000.0f);
