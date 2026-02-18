@@ -4,6 +4,7 @@
 #include "vector.h"
 #include "skeleton_v2.h"
 #include <pico/util/queue.h>
+#include <pico/multicore.h>
 
 #define PPM_WIDTH 32
 #define PPM_HEIGHT 32
@@ -12,6 +13,66 @@ queue_t   s_in;
 queue_t   s_1;
 queue_t   s_2;
 queue_t   s_out;
+
+/******************MULTI CORE SUPPORT*************************/
+
+typedef enum{
+    WRAP_IMAGE=0,
+    UNWRAP_IMAGE,
+    MAP_MATRIX,
+} function_type_t;
+
+typedef void (*wrp_fnc)(char* in, vect_handle_t vec_out);
+typedef void (*unwrp_fnc)(vect_handle_t vec_in, char* out);
+typedef void (*mm_fnc)(vect_handle_t mat_in, vect_handle_t mat_out, void* (*f)(void*));
+
+static void core1_entry() {
+    while (true) {
+        function_type_t ft = multicore_fifo_pop_blocking();
+        switch(ft){
+            case WRAP_IMAGE:
+                uintptr_t fn0_raw  = multicore_fifo_pop_blocking();
+                uintptr_t arg_stream0 = multicore_fifo_pop_blocking();
+                uintptr_t arg_vec0 = multicore_fifo_pop_blocking();
+
+                wrp_fnc fn0 = (wrp_fnc)fn0_raw;
+                char *stream_in  = (char *)arg_stream0;
+                vect_handle_t vecOUT  = (vect_handle_t)arg_vec0;
+
+                fn0(stream_in,vecOUT);
+            break;
+            case UNWRAP_IMAGE:
+                uintptr_t fn1_raw  = multicore_fifo_pop_blocking();
+                uintptr_t arg_vec1 = multicore_fifo_pop_blocking();
+                uintptr_t arg_stream1 = multicore_fifo_pop_blocking();
+
+                unwrp_fnc fn1 = (unwrp_fnc)fn1_raw;
+                vect_handle_t vecIN  = (vect_handle_t)arg_vec1;
+                char *stream_out  = (char *)arg_stream1;
+
+                fn1(vecIN,stream_out);
+            break;
+            case MAP_MATRIX:
+                uintptr_t fn2_raw  = multicore_fifo_pop_blocking();
+                uintptr_t arg_vecI = multicore_fifo_pop_blocking();
+                uintptr_t arg_vecO = multicore_fifo_pop_blocking();
+                uintptr_t arg_ff = multicore_fifo_pop_blocking();
+
+                mm_fnc fn2 = (mm_fnc)fn2_raw;
+                vect_handle_t vecI  = (vect_handle_t)arg_vecI;
+                vect_handle_t vecO  = (vect_handle_t)arg_vecO;
+                void * ff = (void *) arg_ff;
+
+                fn2(vecI,vecO,ff);
+            break;
+
+            default:
+                //ft = 99;
+            break;
+        }
+        multicore_fifo_push_blocking(ft);
+    }
+}
 
 /*************************************************************/
 
@@ -79,10 +140,72 @@ void wrapImageRGB(char* in, vect_handle_t vec_out){
     }
 }
 
+void wrapImageRGB_0(char* in, vect_handle_t vec_out){
+    vect_handle_t vT;
+
+    for(uint8_t i = 0; i < (vec_out->len)/2; i++){
+        //printf("h=%d | ", i);
+        vT = (vect_t *) vect_read(vec_out, i);
+        for(uint8_t j = 0; j < (vT->len); j++){
+            uint16_t idx = (i * (vT->len) + j)*3;
+            pixel_t p = {in[idx], in[idx+1], in[idx+2]};
+            vect_write(vT, j, &p);
+            //printf("%d,%d,%d\t",p.r,p.g,p.b);
+        }
+        //printf("\n");
+    }
+}
+
+void wrapImageRGB_1(char* in, vect_handle_t vec_out){
+    vect_handle_t vT;
+
+    for(uint8_t i = (vec_out->len)/2; i < (vec_out->len); i++){
+        //printf("h=%d | ", i);
+        vT = (vect_t *) vect_read(vec_out, i);
+        for(uint8_t j = 0; j < (vT->len); j++){
+            uint16_t idx = (i * (vT->len) + j)*3;
+            pixel_t p = {in[idx], in[idx+1], in[idx+2]};
+            vect_write(vT, j, &p);
+            //printf("%d,%d,%d\t",p.r,p.g,p.b);
+        }
+        //printf("\n");
+    }
+}
+
 void wrapImageGRY(char* in, vect_handle_t vec_out){
     vect_handle_t vT;
 
     for(uint8_t i = 0; i < (vec_out->len); i++){
+        //printf("h=%d | ", i);
+        vT = (vect_t *) vect_read(vec_out, i);
+        for(uint8_t j = 0; j < (vT->len); j++){
+            uint16_t idx = i* (vT->len) + j;
+            //printf("i=%d,%.1f\t",idx, in[i*w+j]);
+            vect_write(vT, j, &in[idx]);
+        }
+        //printf("\n");
+    }
+}
+
+void wrapImageGRY_0(char* in, vect_handle_t vec_out){
+    vect_handle_t vT;
+
+    for(uint8_t i = 0; i < (vec_out->len)/2; i++){
+        //printf("h=%d | ", i);
+        vT = (vect_t *) vect_read(vec_out, i);
+        for(uint8_t j = 0; j < (vT->len); j++){
+            uint16_t idx = i* (vT->len) + j;
+            //printf("i=%d,%.1f\t",idx, in[i*w+j]);
+            vect_write(vT, j, &in[idx]);
+        }
+        //printf("\n");
+    }
+}
+
+void wrapImageGRY_1(char* in, vect_handle_t vec_out){
+    vect_handle_t vT;
+
+    for(uint8_t i = (vec_out->len)/2; i < (vec_out->len); i++){
         //printf("h=%d | ", i);
         vT = (vect_t *) vect_read(vec_out, i);
         for(uint8_t j = 0; j < (vT->len); j++){
@@ -108,7 +231,78 @@ void unwrapImage(vect_handle_t vec_in, char* out){
 
 }
 
+void unwrapImage_0(vect_handle_t vec_in, char* out){
+    vect_handle_t vT;
+    for(uint8_t i = 0; i < (vec_in->len)/2; i++){
+        vT = (vect_t *) vect_read(vec_in,i);
+        for(uint8_t j = 0; j < vT->len; j++){
+            char val = *(char *) vect_read(vT,j);
+            out[i*(vT->len) + j] = val;
+            //printf("%d\t", val);
+        }
+        //printf("\n");
+    }
+
+}
+
+void unwrapImage_1(vect_handle_t vec_in, char* out){
+    vect_handle_t vT;
+    for(uint8_t i = (vec_in->len)/2; i < vec_in->len; i++){
+        vT = (vect_t *) vect_read(vec_in,i);
+        for(uint8_t j = 0; j < vT->len; j++){
+            char val = *(char *) vect_read(vT,j);
+            out[i*(vT->len) + j] = val;
+            //printf("%d\t", val);
+        }
+        //printf("\n");
+    }
+
+}
+
+
+void mapMatrix_0(vect_handle_t mat_in, vect_handle_t mat_out, void* (*f)(void*)){
+    vect_handle_t vT;
+
+    for(int i=0; i < (mat_in->len)/2; i++){
+        vT = (vect_t *)vect_read(mat_in,i);
+        for(int j=0; j < (vT->len); j++){
+            //pixel_t a = *(pixel_t *) vect_read(&temp,j);
+            //int sum = a.r + a.g + a.b;
+            //printf("j=%d,%d,%d,%d,%d\t",j,a.r,a.g,a.b, sum);
+            vect_write(&((vect_t *) mat_out->data)[i],j, f(vect_read(vT,j)));
+            //vect_write(&vec_out, i, f(vect_read(vec_in,i)));
+        }
+   }
+}
+
+
+void mapMatrix_1(vect_handle_t mat_in, vect_handle_t mat_out, void* (*f)(void*)){
+    vect_handle_t vT;
+
+    for(int i=(mat_in->len)/2; i < (mat_in->len); i++){
+        vT = (vect_t *)vect_read(mat_in,i);
+        for(int j=0; j < (vT->len); j++){
+            //pixel_t a = *(pixel_t *) vect_read(&temp,j);
+            //int sum = a.r + a.g + a.b;
+            //printf("j=%d,%d,%d,%d,%d\t",j,a.r,a.g,a.b, sum);
+            vect_write(&((vect_t *) mat_out->data)[i],j, f(vect_read(vT,j)));
+            //vect_write(&vec_out, i, f(vect_read(vec_in,i)));
+        }
+   }
+}
+
 void* grayscale(void* pin){
+    pixel_t *in = (pixel_t *)pin;
+    static char tmp = 0;
+
+    float gray = ((float)(in->r) * 0.3125) + ((float)(in->g) * 0.5625) + ((float)(in->b) * 0.125);
+    tmp = (char) gray;
+    //printf("%2.2f %d ", gray, tmp);
+
+    return &tmp;
+}
+
+void* grayscale_1(void* pin){
     pixel_t *in = (pixel_t *)pin;
     static char tmp = 0;
 
@@ -129,6 +323,16 @@ void* convert_ascii(void* pin){
     return &tmp;
 }
 
+void* convert_ascii_1(void* pin){
+    char *in = (char *)pin;
+    static char tmp = 0;
+
+    uint8_t idx = *in * (NR_ASCII_CHARS-1) / 255;
+    tmp = ascii[idx];
+
+    return &tmp;
+}
+
 void* f_sum (void* pin1,void* pin2){
     char *in1 = (char *)pin1;
     char *in2 = (char *)pin2;
@@ -139,6 +343,15 @@ void* f_sum (void* pin1,void* pin2){
 }
 
 void* div_4(void* pin){
+    char* in = (char *) pin;
+    static char tmp =0;
+
+    tmp = *in/4;
+
+    return &tmp;
+}
+
+void* div_4_1(void* pin){
     char* in = (char *) pin;
     static char tmp =0;
 
@@ -167,18 +380,51 @@ grayscale = mapMatrix (convert . fromVector) . mapV (groupV 3)
                     + fromIntegral b * 0.125
     convert _ = error "X length is not a multiple of 3"
 */
-void f_grayscale(char* in, char* out) {
+static void f_grayscale(char* in, char* out) {
     // read data stream to matrix
-    //vect_t image = createMatrix_pixel(in, w, h);
-    wrapImageRGB(in, &mRGB);
+    // Send task to core1
+    function_type_t z = WRAP_IMAGE;
+    multicore_fifo_push_blocking(z);
+    multicore_fifo_push_blocking((uintptr_t)wrapImageRGB_1);
+    multicore_fifo_push_blocking((uintptr_t)(char *)(uintptr_t) in);
+    multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mRGB);
+
+    wrapImageRGB_0(in, &mRGB);
+
+    //acknowledge
+    multicore_fifo_pop_blocking();
+
+    // Send task to core1
+    z = MAP_MATRIX;
+    multicore_fifo_push_blocking(z);
+    multicore_fifo_push_blocking((uintptr_t)mapMatrix_1);
+    multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mRGB);
+    multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mGRY1);
+    multicore_fifo_push_blocking((uintptr_t)(void *)(uintptr_t) grayscale_1);
 
     // mapMatrix operation with grayscale function on each element
     //vect_t grayImage = mapV(&image,f_gray); 
     //vect_t grayImage = mapMatrix(&image, grayscale); 
-    mapMatrix(&mRGB, &mGRY1, grayscale);
+    mapMatrix_0(&mRGB, &mGRY1, grayscale);
+
+    //acknowledge
+    multicore_fifo_pop_blocking();
+
+    // Send task to core1
+    // z = UNWRAP_IMAGE;
+    // multicore_fifo_push_blocking(z);
+    // multicore_fifo_push_blocking((uintptr_t)unwrapImage_1);
+    // multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mGRY1);
+    // multicore_fifo_push_blocking((uintptr_t)(char *)(uintptr_t) out);
 
     //write matrix to data stream
     unwrapImage(&mGRY1, out);
+
+    //acknowledge
+    // multicore_fifo_pop_blocking();
+    //uint32_t w = multicore_fifo_pop_blocking();
+
+    //printf("%d %d %d\n",x,y,w);
 }
 
 
@@ -200,15 +446,39 @@ toAsciiArt = mapMatrix num2char
     level n = truncate $ nLevels * (n / 255)
     nLevels = fromIntegral $ length asciiLevels - 1
 */
-void f_ascii(char* in, char* out) {
+static void f_ascii(char* in, char* out) {
 
     // read data stream to matrix
-    //vect_t grayImage = createMatrix_gry(in, w, h);
-    wrapImageGRY(in, &mRSZ2);
+    // Send task to core1
+    function_type_t z = WRAP_IMAGE;
+    multicore_fifo_push_blocking(z);
+    multicore_fifo_push_blocking((uintptr_t)wrapImageGRY_1);
+    multicore_fifo_push_blocking((uintptr_t)(char *)(uintptr_t) in);
+    multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mRSZ2);
+
+    wrapImageGRY_0(in, &mRSZ2);
+
+    //acknowledge
+    multicore_fifo_pop_blocking();
 
     // mapMatrix operation with convert_ascii function on each element
     //vect_t asciiImage = mapMatrix(&grayImage, convert_ascii); 
-    mapMatrix(&mRSZ2, &mASCII, convert_ascii);
+
+    // Send task to core1
+    z = MAP_MATRIX;
+    multicore_fifo_push_blocking(z);
+    multicore_fifo_push_blocking((uintptr_t)mapMatrix_1);
+    multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mRSZ2);
+    multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mASCII);
+    multicore_fifo_push_blocking((uintptr_t)(void *)(uintptr_t) convert_ascii_1);
+
+    // mapMatrix operation with grayscale function on each element
+    //vect_t grayImage = mapV(&image,f_gray); 
+    //vect_t grayImage = mapMatrix(&image, grayscale); 
+    mapMatrix_0(&mRSZ2, &mASCII, convert_ascii);
+
+    //acknowledge
+    multicore_fifo_pop_blocking();
 
     //write matrix to data stream
     unwrapImage(&mASCII, out);
@@ -236,12 +506,34 @@ resize = mapMatrix (/ 4) . sumRows . sumCols
     sumCols = mapV (mapV (reduceV (+)) . groupV 2)
     sumRows = mapV (reduceV (zipWithV (+))) . groupV 2
 */
-void f_resize(char* in, char* out){
-
+static void f_resize(char* in, char* out){
     static char sum = 0;
-    wrapImageGRY(in, &mGRY2);
 
-    mapMatrix(&mGRY2, &mGRY2, div_4);
+    // Send task to core1
+    function_type_t z = WRAP_IMAGE;
+    multicore_fifo_push_blocking(z);
+    multicore_fifo_push_blocking((uintptr_t)wrapImageGRY_1);
+    multicore_fifo_push_blocking((uintptr_t)(char *)(uintptr_t) in);
+    multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mGRY2);
+
+    wrapImageGRY_0(in, &mGRY2);
+
+    //acknowledge
+    multicore_fifo_pop_blocking();
+
+    // Send task to core1
+    z = MAP_MATRIX;
+    multicore_fifo_push_blocking(z);
+    multicore_fifo_push_blocking((uintptr_t)mapMatrix_1);
+    multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mGRY2);
+    multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mGRY2);
+    multicore_fifo_push_blocking((uintptr_t)(void *)(uintptr_t) div_4_1);
+
+    // mapMatrix operation with grayscale function on each element
+    mapMatrix_0(&mGRY2, &mGRY2, div_4);
+
+    //acknowledge
+    multicore_fifo_pop_blocking();
     
     vect_handle_t vM0, vM1, vR;
     for(uint8_t i =0; i< mGRY2.len; i+=2){
@@ -256,8 +548,6 @@ void f_resize(char* in, char* out){
             vect_write(vR, j/2, &sum);
         }
     }
-
-    //mapMatrix(&mRSZ1, &mRSZ1, div_4);
 
     //write matrix to data stream
     unwrapImage(&mRSZ1, out);
@@ -318,6 +608,8 @@ int main()
     queue_init(&s_out, sizeof(char), width*height/4);
 
     uint8_t img_id = 0;
+
+    multicore_launch_core1(core1_entry);
     
     while (true) { 
         //BSP_ToggleLED(LED_GREEN);
@@ -344,7 +636,7 @@ int main()
         actor11SDF(w*h/4, w*h/4, &s_2, &s_out, f_ascii);
 
         tStop = time_us_32();
-        // printf("T diff=%.3f\n", tStop, (tStop-tStart)/1000.0f);
+        printf("T diff=%.3f\n", tStop, (tStop-tStart)/1000.0f);
 
         /* Write output tokens */
         printf("Output:\n");
