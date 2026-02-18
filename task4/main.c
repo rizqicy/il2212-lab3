@@ -360,6 +360,25 @@ void* div_4_1(void* pin){
     return &tmp;
 }
 
+void sumCols_sumRows(vect_handle_t vec_in, vect_handle_t vec_out){
+    vect_handle_t vM0, vM1, vR;
+    for(uint8_t i =0; i< (vec_in->len); i+=2){
+        vM0 = (vect_t *) vect_read(vec_in,i);
+        vM1 = (vect_t *) vect_read(vec_in,i+1);
+
+        zipWithV(vM0,vM1, vM0, f_sum);
+
+        vR = (vect_t *) vect_read(vec_out, i/2);
+        for(uint8_t j = 0; j< vM0->len; j+=2){
+            char sum = *(char *)vect_read(vM0,j) + *(char *)vect_read(vM0,j+1);
+            vect_write(vR, j/2, &sum);
+        }
+    }
+
+}
+
+
+
 /*
 -- | The graySDF actor, which transforms a every RGB image from a stream
 -- into a grayscale one. In this case it is assumed that the X dimension holds the additional information.
@@ -422,7 +441,6 @@ static void f_grayscale(char* in, char* out) {
 
     //acknowledge
     // multicore_fifo_pop_blocking();
-    //uint32_t w = multicore_fifo_pop_blocking();
 
     //printf("%d %d %d\n",x,y,w);
 }
@@ -535,19 +553,7 @@ static void f_resize(char* in, char* out){
     //acknowledge
     multicore_fifo_pop_blocking();
     
-    vect_handle_t vM0, vM1, vR;
-    for(uint8_t i =0; i< mGRY2.len; i+=2){
-        vM0 = (vect_t *) vect_read(&mGRY2,i);
-        vM1 = (vect_t *) vect_read(&mGRY2,i+1);
-
-        zipWithV(vM0,vM1, vM0, f_sum);
-
-        vR = (vect_t *) vect_read(&mRSZ1, i/2);
-        for(uint8_t j = 0; j< vM0->len; j+=2){
-            sum = *(char *)vect_read(vM0,j) + *(char *)vect_read(vM0,j+1);
-            vect_write(vR, j/2, &sum);
-        }
-    }
+    sumCols_sumRows(&mGRY2, &mRSZ1);
 
     //write matrix to data stream
     unwrapImage(&mRSZ1, out);
