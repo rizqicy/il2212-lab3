@@ -13,7 +13,6 @@
 #define PPM_HEIGHT 32
 
 TaskHandle_t    blinkTsk; /* Handle for the LED task. */
-TaskHandle_t    ReadImageTsk; /* Handle for reading image data */
 TaskHandle_t    graySDFTsk; /* Handle for graySDF task */
 TaskHandle_t    asciiSDFTsk; /* Handle for asciiSDF task. */
 QueueHandle_t   s_in;
@@ -26,7 +25,6 @@ QueueHandle_t   s_out;
  * @param args Task period (uint32_t).
  */
 void blink_task(void *args);
-
 void graySDF_task(void *args);
 void asciiSDF_task(void *args);
 
@@ -79,10 +77,10 @@ void actor11SDF(uint16_t consum, uint16_t prod,
 void wrapImageRGB(char* in, vect_handle_t vec_out, uint8_t w, uint8_t h){
     vect_handle_t temp;
 
-    for(int i = 0; i < h; i++){
+    for(uint8_t i = 0; i < h; i++){
         //printf("h=%d | ", i);
-        for(int j = 0; j < w; j++){
-            int idx = (i * w + j)*3;
+        for(uint8_t j = 0; j < w; j++){
+            uint16_t idx = (i * w + j)*3;
             pixel_t p = {in[idx], in[idx+1], in[idx+2]};
             vect_write(&((vect_t *) vec_out->data)[i], j, &p);
             //printf("%d,%d,%d\t",p.r,p.g,p.b);
@@ -94,10 +92,10 @@ void wrapImageRGB(char* in, vect_handle_t vec_out, uint8_t w, uint8_t h){
 void wrapImageGRY(char* in, vect_handle_t vec_out, uint8_t w, uint8_t h){
     vect_handle_t temp;
 
-    for(int i = 0; i < h; i++){
+    for(uint8_t i = 0; i < h; i++){
         //printf("h=%d | ", i);
-        for(int j = 0; j < w; j++){
-            int idx = i*w + j;
+        for(uint8_t j = 0; j < w; j++){
+            uint16_t idx = i*w + j;
             vect_write(&((vect_t *) vec_out->data)[i], j, &in[i*w + j]);
             //printf("i=%d,%d\t",idx, in[i*w+j]);
         }
@@ -201,7 +199,7 @@ void f_ascii(char* in, char* out, uint8_t w, uint8_t h) {
     //write matrix to data stream
     vect_handle_t vT;
     for(uint8_t i = 0; i < mASCII.len; i++){
-        vT = vect_read(&mASCII,i);
+        vT = (vect_t *) vect_read(&mASCII,i);
         for(uint8_t j = 0; j < vT->len; j++){
             char val = *(char *) vect_read(vT,j);
             out[i*(vT->len) + j] = val;
@@ -213,8 +211,6 @@ void f_ascii(char* in, char* out, uint8_t w, uint8_t h) {
 
 /*************************************************************/
 
-uint32_t tStart;
-uint32_t tStop;
 /**
  * @brief Main function.
  * 
@@ -225,7 +221,7 @@ int main()
     BSP_Init();             /* Initialize all components on the lab-kit. */
     
     /* Create the tasks. */
-    xTaskCreate(blink_task, "Blink Task", 512, (void*) 1000, 2, &blinkTsk);
+    //xTaskCreate(blink_task, "Blink Task", 512, (void*) 1000, 2, &blinkTsk);
     xTaskCreate(graySDF_task, "graySDF Task", 2048, (void*) 3000, 2, &graySDFTsk);
     xTaskCreate(asciiSDF_task, "asciiSDF Task", 2048, (void*) 3000, 2, &asciiSDFTsk);
 
@@ -282,7 +278,7 @@ void graySDF_task(void *args){
     const TickType_t xPeriod = (int)args;   /* Get period (in ticks) from argument. */
     TickType_t time_start;
 
-    //uint32_t tStart;
+    uint32_t tStart,tStop;
 
     uint8_t img_id = 0;
 
@@ -309,9 +305,9 @@ void graySDF_task(void *args){
 
         /* graySDF actor */
         actor11SDF(3*w*h, w*h, &s_in, &s_1, f_grayscale, w, h);
-
+        tStop = time_us_32();
         //printf("st=%d\t", time_start);
-        printf("st=%d\t", tStart);
+        printf("T1 diff=%.3f\t", (tStop-tStart)/1000.0f);
         img_id++;
     }
 }
@@ -324,12 +320,13 @@ void asciiSDF_task(void *args){
 
     char output;
 
-    //uint32_t tStop;
+    uint32_t tStart,tStop;
     
     uint8_t w = PPM_WIDTH;
     uint8_t h = PPM_HEIGHT;
 
     for(;;){
+        tStart = time_us_32();
         /* asciiSDF actor */
         actor11SDF(w*h, w*h, &s_1, &s_out, f_ascii, w, h);
 
@@ -337,7 +334,7 @@ void asciiSDF_task(void *args){
         //printf("sp=%d\n", time_stop);
 
         tStop = time_us_32();
-        printf("sp=%d, diff=%.3f\n", tStop, (tStop-tStart)/1000.0f);
+        printf("T2 diff=%.3f\n", (tStop-tStart)/1000.0f);
         //xQueueReceive(s_out, &c, (TickType_t) portMAX_DELAY);
         //printf("%d ",c);
 
@@ -355,42 +352,3 @@ void asciiSDF_task(void *args){
     }
 }
 
-void graySDF123_task(void *args){
-    TickType_t xLastWakeTime = 0;
-    const TickType_t xPeriod = (int)args;   /* Get period (in ticks) from argument. */
-
-    uint8_t img_id = 0;
-    
-    for(;;){
-        if (img_id == 4) {
-            img_id = 0;
-        }
-        
-        uint8_t w = sequence1[img_id][0];
-        uint8_t h = sequence1[img_id][1];
-        uint8_t max_val = sequence1[img_id][2];
-    //    for (uint32_t i = 3; i < (w*h); i++){
-    //        char x = sequence1[img_id][i];
-    //         if(i % w == 0){
-    //             printf("\n");
-    //         }
-    //        printf("%d ",x);
-
-    //    }
-
-       vect_t A = createMatrix_pixel(sequence1[img_id]+3,w,h);
-
-        for(uint i = 0; i < h; i++){
-            vect_t vT = *(vect_t *)vect_read(&A, i);
-            for(uint8_t j = 0; j < w; j++){
-                pixel_t p = *(pixel_t *) vect_read(&vT, j);
-                printf("%d,%d,%d ",p.r,p.g,p.b);
-            }
-            printf("\n");
-        }
-        printf("SEQ IMG %d == END\n", img_id);
-        img_id++;
-    
-        vTaskDelayUntil(&xLastWakeTime, xPeriod);   /* Wait for the next release. */
-    }
-}
