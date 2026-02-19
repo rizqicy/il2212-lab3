@@ -3,7 +3,6 @@
 #include "images_alt.h"
 #include "vector.h"
 #include "skeleton_v2.h"
-//#include "buffer_blocking_pico2.h"
 #include <pico/util/queue.h>
 
 #define PPM_WIDTH 32
@@ -64,10 +63,10 @@ void actor11SDF(uint16_t consum, uint16_t prod,
 void wrapImageRGB(char* in, vect_handle_t vec_out, uint8_t w, uint8_t h){
     vect_handle_t temp;
 
-    for(int i = 0; i < h; i++){
+    for(uint8_t i = 0; i < h; i++){
         //printf("h=%d | ", i);
-        for(int j = 0; j < w; j++){
-            int idx = (i * w + j)*3;
+        for(uint8_t j = 0; j < w; j++){
+            uint16_t idx = (i * w + j)*3;
             pixel_t p = {in[idx], in[idx+1], in[idx+2]};
             vect_write(&((vect_t *) vec_out->data)[i], j, &p);
             //printf("%d,%d,%d\t",p.r,p.g,p.b);
@@ -79,10 +78,10 @@ void wrapImageRGB(char* in, vect_handle_t vec_out, uint8_t w, uint8_t h){
 void wrapImageGRY(char* in, vect_handle_t vec_out, uint8_t w, uint8_t h){
     vect_handle_t temp;
 
-    for(int i = 0; i < h; i++){
+    for(uint8_t i = 0; i < h; i++){
         //printf("h=%d | ", i);
-        for(int j = 0; j < w; j++){
-            int idx = i*w + j;
+        for(uint8_t j = 0; j < w; j++){
+            uint16_t idx = i*w + j;
             vect_write(&((vect_t *) vec_out->data)[i], j, &in[i*w + j]);
             //printf("i=%d,%d\t",idx, in[i*w+j]);
         }
@@ -186,7 +185,7 @@ void f_ascii(char* in, char* out, uint8_t w, uint8_t h) {
     //write matrix to data stream
     vect_handle_t vT;
     for(uint8_t i = 0; i < mASCII.len; i++){
-        vT = vect_read(&mASCII,i);
+        vT = (vect_t *) vect_read(&mASCII,i);
         for(uint8_t j = 0; j < vT->len; j++){
             char val = *(char *) vect_read(vT,j);
             out[i*(vT->len) + j] = val;
@@ -264,18 +263,18 @@ int main()
         actor11SDF(w*h, w*h, &s_1, &s_out, f_ascii, w, h);
 
         tStop = time_us_32();
-        // printf("sp=%d, diff=%.3f\n", tStop, (tStop-tStart)/1000.0f);
+        printf("T diff=%.3f\n", (tStop-tStart)/1000.0f);
 
         /* Write output tokens */
-        printf("Output:\n");
+        // printf("Output:\n");
         for(uint16_t j = 0; j<h; j++) {
             for(uint16_t i = 0; i < w; i++){
                 readToken(&s_out, &output);
-                printf("%c", output);
+                // printf("%c", output);
             }
-            printf("\n");
+            // printf("\n");
         }
-        printf("\n");
+        // printf("\n");
 
         //sleep_ms(1000); 
         img_id++;
