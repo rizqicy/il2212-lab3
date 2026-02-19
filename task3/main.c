@@ -3,7 +3,6 @@
 #include "images_alt.h"
 #include "vector.h"
 #include "skeleton_v2.h"
-//#include "buffer_blocking_pico2.h"
 #include <pico/util/queue.h>
 
 #define PPM_WIDTH 32
@@ -67,9 +66,9 @@ void actor11SDF(uint16_t consum, uint16_t prod,
 void wrapImageRGB(char* in, vect_handle_t vec_out, uint8_t w, uint8_t h){
     vect_handle_t temp;
 
-    for(uint16_t i = 0; i < h; i++){
+    for(uint8_t i = 0; i < h; i++){
         //printf("h=%d | ", i);
-        for(uint16_t j = 0; j < w; j++){
+        for(uint8_t j = 0; j < w; j++){
             uint16_t idx = (i * w + j)*3;
             pixel_t p = {in[idx], in[idx+1], in[idx+2]};
             vect_write(&((vect_t *) vec_out->data)[i], j, &p);
@@ -82,9 +81,9 @@ void wrapImageRGB(char* in, vect_handle_t vec_out, uint8_t w, uint8_t h){
 void wrapImageGRY(char* in, vect_handle_t vec_out, uint8_t w, uint8_t h){
     vect_handle_t temp;
 
-    for(uint16_t i = 0; i < h; i++){
+    for(uint8_t i = 0; i < h; i++){
         //printf("h=%d | ", i);
-        for(uint16_t j = 0; j < w; j++){
+        for(uint8_t j = 0; j < w; j++){
             uint16_t idx = i*w + j;
             //printf("i=%d,%.1f\t",idx, in[i*w+j]);
             vect_write(&((vect_t *) vec_out->data)[i], j, &in[i*w + j]);
@@ -268,7 +267,7 @@ void f_resize(char* in, char* out, uint8_t w, uint8_t h){
     for(uint8_t i = 0; i < mRSZ1.len; i++){
         vT = (vect_t *) vect_read(&mRSZ1,i);
         for(uint8_t j = 0; j < vT->len; j++){
-            float val = *(char *) vect_read(vT,j);
+            char val = *(char *) vect_read(vT,j);
             out[i*(vT->len) + j] = val;
             //printf("%c", val);
         }
@@ -357,14 +356,14 @@ int main()
         actor11SDF(w*h/4, w*h/4, &s_2, &s_out, f_ascii, w/2, h/2);
 
         tStop = time_us_32();
-        // printf("sp=%d, diff=%.3f\n", tStop, (tStop-tStart)/1000.0f);
+        // printf("T diff=%.3f\n", tStop, (tStop-tStart)/1000.0f);
 
         /* Write output tokens */
         printf("Output:\n");
         for(uint16_t j = 0; j< (h/2); j++) {
             for(uint16_t i = 0; i < (w/2); i++){
                 readToken(&s_out, &output);
-                printf("%c", output);
+               printf("%c", output);
             }
             printf("\n");
         }
