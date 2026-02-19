@@ -20,11 +20,13 @@ typedef enum{
     WRAP_IMAGE=0,
     UNWRAP_IMAGE,
     MAP_MATRIX,
+    SUMCOLS_SUMROWS
 } function_type_t;
 
 typedef void (*wrp_fnc)(char* in, vect_handle_t vec_out);
 typedef void (*unwrp_fnc)(vect_handle_t vec_in, char* out);
 typedef void (*mm_fnc)(vect_handle_t mat_in, vect_handle_t mat_out, void* (*f)(void*));
+typedef void (*ss_fnc)(vect_handle_t vec_in, vect_handle_t vec_out);
 
 static void core1_entry() {
     while (true) {
@@ -65,6 +67,18 @@ static void core1_entry() {
 
                 fn2(vecI,vecO,ff);
             break;
+            case SUMCOLS_SUMROWS:
+                uintptr_t fn3_raw  = multicore_fifo_pop_blocking();
+                uintptr_t arg3_vecI = multicore_fifo_pop_blocking();
+                uintptr_t arg3_vecO = multicore_fifo_pop_blocking();
+
+                ss_fnc fn3 = (ss_fnc)fn3_raw;
+                vect_handle_t vecI3  = (vect_handle_t)arg3_vecI;
+                vect_handle_t vecO3  = (vect_handle_t)arg3_vecO;
+
+                fn3(vecI3,vecO3);
+            break;
+
 
             default:
                 //ft = 99;
@@ -107,7 +121,7 @@ void writeToken(queue_t *ch, char data) {
     //circular_buf_put(ch, data);
 }
 
-void actor11SDF(uint16_t consum, uint16_t prod,
+static void actor11SDF(uint16_t consum, uint16_t prod,
                 queue_t* ch_in, queue_t* ch_out,
                 void (*f) (char*, char*))
 {
@@ -223,7 +237,9 @@ void unwrapImage(vect_handle_t vec_in, char* out){
         vT = (vect_t *) vect_read(vec_in,i);
         for(uint8_t j = 0; j < vT->len; j++){
             char val = *(char *) vect_read(vT,j);
-            out[i*(vT->len) + j] = val;
+            uint16_t idx = i* (vT->len) + j;
+
+            out[idx] = val;
             //printf("%d\t", val);
         }
         //printf("\n");
@@ -237,7 +253,11 @@ void unwrapImage_0(vect_handle_t vec_in, char* out){
         vT = (vect_t *) vect_read(vec_in,i);
         for(uint8_t j = 0; j < vT->len; j++){
             char val = *(char *) vect_read(vT,j);
-            out[i*(vT->len) + j] = val;
+            uint16_t idx = i* (vT->len) + j;
+
+            out[idx] = val;
+            //sleep_us(2);
+            //memcpy(&out[idx], val, sizeof(char));
             //printf("%d\t", val);
         }
         //printf("\n");
@@ -251,14 +271,16 @@ void unwrapImage_1(vect_handle_t vec_in, char* out){
         vT = (vect_t *) vect_read(vec_in,i);
         for(uint8_t j = 0; j < vT->len; j++){
             char val = *(char *) vect_read(vT,j);
-            out[i*(vT->len) + j] = val;
-            //printf("%d\t", val);
+            uint16_t idx = i* (vT->len) + j;
+
+            out[idx] = val;
+            //memcpy(&out[idx], val, sizeof(char));
+            //printf("%d %d\t",idx, val);
         }
         //printf("\n");
     }
 
 }
-
 
 void mapMatrix_0(vect_handle_t mat_in, vect_handle_t mat_out, void* (*f)(void*)){
     vect_handle_t vT;
@@ -342,6 +364,15 @@ void* f_sum (void* pin1,void* pin2){
     return &tmp;
 }
 
+void* f_sum_1 (void* pin1,void* pin2){
+    char *in1 = (char *)pin1;
+    char *in2 = (char *)pin2;
+    static char tmp = 0;     //temporary memory
+
+    tmp = *in1 + *in2;
+    return &tmp;
+}
+
 void* div_4(void* pin){
     char* in = (char *) pin;
     static char tmp =0;
@@ -377,6 +408,39 @@ void sumCols_sumRows(vect_handle_t vec_in, vect_handle_t vec_out){
 
 }
 
+void sumCols_sumRows_0(vect_handle_t vec_in, vect_handle_t vec_out){
+    vect_handle_t vM0, vM1, vR;
+    for(uint8_t i =0; i< (vec_in->len)/2; i+=2){
+        vM0 = (vect_t *) vect_read(vec_in,i);
+        vM1 = (vect_t *) vect_read(vec_in,i+1);
+
+        zipWithV(vM0,vM1, vM0, f_sum);
+
+        vR = (vect_t *) vect_read(vec_out, i/2);
+        for(uint8_t j = 0; j< vM0->len; j+=2){
+            char sum = *(char *)vect_read(vM0,j) + *(char *)vect_read(vM0,j+1);
+            vect_write(vR, j/2, &sum);
+        }
+    }
+
+}
+
+void sumCols_sumRows_1(vect_handle_t vec_in, vect_handle_t vec_out){
+    vect_handle_t vM0, vM1, vR;
+    for(uint8_t i =(vec_in->len)/2; i< (vec_in->len); i+=2){
+        vM0 = (vect_t *) vect_read(vec_in,i);
+        vM1 = (vect_t *) vect_read(vec_in,i+1);
+
+        zipWithV(vM0,vM1, vM0, f_sum_1);
+
+        vR = (vect_t *) vect_read(vec_out, i/2);
+        for(uint8_t j = 0; j< vM0->len; j+=2){
+            char sum = *(char *)vect_read(vM0,j) + *(char *)vect_read(vM0,j+1);
+            vect_write(vR, j/2, &sum);
+        }
+    }
+
+}
 
 
 /*
@@ -400,6 +464,7 @@ grayscale = mapMatrix (convert . fromVector) . mapV (groupV 3)
     convert _ = error "X length is not a multiple of 3"
 */
 static void f_grayscale(char* in, char* out) {
+    char test[1024];
     // read data stream to matrix
     // Send task to core1
     function_type_t z = WRAP_IMAGE;
@@ -436,11 +501,13 @@ static void f_grayscale(char* in, char* out) {
     // multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mGRY1);
     // multicore_fifo_push_blocking((uintptr_t)(char *)(uintptr_t) out);
 
+    //sleep_us(200);
+
     //write matrix to data stream
     unwrapImage(&mGRY1, out);
 
     //acknowledge
-    // multicore_fifo_pop_blocking();
+   // multicore_fifo_pop_blocking();
 
     //printf("%d %d %d\n",x,y,w);
 }
@@ -552,8 +619,19 @@ static void f_resize(char* in, char* out){
 
     //acknowledge
     multicore_fifo_pop_blocking();
-    
-    sumCols_sumRows(&mGRY2, &mRSZ1);
+
+    // Send task to core1
+    z = SUMCOLS_SUMROWS;
+    multicore_fifo_push_blocking(z);
+    multicore_fifo_push_blocking((uintptr_t)sumCols_sumRows_1);
+    multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mGRY2);
+    multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mRSZ1);
+
+    // sum columns and rows
+    sumCols_sumRows_0(&mGRY2, &mRSZ1);
+
+    //acknowledge
+    multicore_fifo_pop_blocking();
 
     //write matrix to data stream
     unwrapImage(&mRSZ1, out);
