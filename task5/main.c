@@ -8,79 +8,6 @@
 #define PPM_WIDTH 32
 #define PPM_HEIGHT 32
 
-/******************MULTI CORE SUPPORT*************************/
-
-typedef enum{
-    WRAP_IMAGE=0,
-    UNWRAP_IMAGE,
-    MAP_MATRIX,
-    SUMCOLS_SUMROWS
-} function_type_t;
-
-typedef void (*wrp_fnc)(char* in, vect_handle_t vec_out);
-typedef void (*unwrp_fnc)(vect_handle_t vec_in, char* out);
-typedef void (*mm_fnc)(vect_handle_t mat_in, vect_handle_t mat_out, void* (*f)(void*));
-typedef void (*ss_fnc)(vect_handle_t vec_in, vect_handle_t vec_out);
-
-static void core1_entry() {
-    while (true) {
-        function_type_t ft = multicore_fifo_pop_blocking();
-        switch(ft){
-            case WRAP_IMAGE:
-                uintptr_t fn0_raw  = multicore_fifo_pop_blocking();
-                uintptr_t arg_stream0 = multicore_fifo_pop_blocking();
-                uintptr_t arg_vec0 = multicore_fifo_pop_blocking();
-
-                wrp_fnc fn0 = (wrp_fnc)fn0_raw;
-                char *stream_in  = (char *)arg_stream0;
-                vect_handle_t vecOUT  = (vect_handle_t)arg_vec0;
-
-                fn0(stream_in,vecOUT);
-            break;
-            case UNWRAP_IMAGE:
-                uintptr_t fn1_raw  = multicore_fifo_pop_blocking();
-                uintptr_t arg_vec1 = multicore_fifo_pop_blocking();
-                uintptr_t arg_stream1 = multicore_fifo_pop_blocking();
-
-                unwrp_fnc fn1 = (unwrp_fnc)fn1_raw;
-                vect_handle_t vecIN  = (vect_handle_t)arg_vec1;
-                char *stream_out  = (char *)arg_stream1;
-
-                fn1(vecIN,stream_out);
-            break;
-            case MAP_MATRIX:
-                uintptr_t fn2_raw  = multicore_fifo_pop_blocking();
-                uintptr_t arg_vecI = multicore_fifo_pop_blocking();
-                uintptr_t arg_vecO = multicore_fifo_pop_blocking();
-                uintptr_t arg_ff = multicore_fifo_pop_blocking();
-
-                mm_fnc fn2 = (mm_fnc)fn2_raw;
-                vect_handle_t vecI  = (vect_handle_t)arg_vecI;
-                vect_handle_t vecO  = (vect_handle_t)arg_vecO;
-                void * ff = (void *) arg_ff;
-
-                fn2(vecI,vecO,ff);
-            break;
-            case SUMCOLS_SUMROWS:
-                uintptr_t fn3_raw  = multicore_fifo_pop_blocking();
-                uintptr_t arg3_vecI = multicore_fifo_pop_blocking();
-                uintptr_t arg3_vecO = multicore_fifo_pop_blocking();
-
-                ss_fnc fn3 = (ss_fnc)fn3_raw;
-                vect_handle_t vecI3  = (vect_handle_t)arg3_vecI;
-                vect_handle_t vecO3  = (vect_handle_t)arg3_vecO;
-
-                fn3(vecI3,vecO3);
-            break;
-
-
-            default:
-                //ft = 99;
-            break;
-        }
-        multicore_fifo_push_blocking(ft);
-    }
-}
 
 /*************************************************************/
 
@@ -125,88 +52,6 @@ void wrapImageRGB_1(char* in, vect_handle_t vec_out){
         }
         //printf("\n");
     }
-}
-
-
-void wrapImageGRY_0(char* in, vect_handle_t vec_out){
-    vect_handle_t vT;
-
-    for(uint8_t i = 0; i < (vec_out->len)/2; i++){
-        //printf("h=%d | ", i);
-        vT = (vect_t *) vect_read(vec_out, i);
-        for(uint8_t j = 0; j < (vT->len); j++){
-            uint16_t idx = i* (vT->len) + j;
-            //printf("i=%d,%.1f\t",idx, in[i*w+j]);
-            vect_write(vT, j, &in[idx]);
-        }
-        //printf("\n");
-    }
-}
-
-void wrapImageGRY_1(char* in, vect_handle_t vec_out){
-    vect_handle_t vT;
-
-    for(uint8_t i = (vec_out->len)/2; i < (vec_out->len); i++){
-        //printf("h=%d | ", i);
-        vT = (vect_t *) vect_read(vec_out, i);
-        for(uint8_t j = 0; j < (vT->len); j++){
-            uint16_t idx = i* (vT->len) + j;
-            //printf("i=%d,%.1f\t",idx, in[i*w+j]);
-            vect_write(vT, j, &in[idx]);
-        }
-        //printf("\n");
-    }
-}
-
-void unwrapImage(vect_handle_t vec_in, char* out){
-    vect_handle_t vT;
-    for(uint8_t i = 0; i < vec_in->len; i++){
-        vT = (vect_t *) vect_read(vec_in,i);
-        for(uint8_t j = 0; j < vT->len; j++){
-            char val = *(char *) vect_read(vT,j);
-            uint16_t idx = i* (vT->len) + j;
-
-            out[idx] = val;
-            //printf("%d\t", val);
-        }
-        //printf("\n");
-    }
-
-}
-
-void unwrapImage_0(vect_handle_t vec_in, char* out){
-    vect_handle_t vT;
-    for(uint8_t i = 0; i < (vec_in->len)/2; i++){
-        vT = (vect_t *) vect_read(vec_in,i);
-        for(uint8_t j = 0; j < vT->len; j++){
-            char val = *(char *) vect_read(vT,j);
-            uint16_t idx = i* (vT->len) + j;
-
-            out[idx] = val;
-            //sleep_us(2);
-            //memcpy(&out[idx], val, sizeof(char));
-            //printf("%d\t", val);
-        }
-        //printf("\n");
-    }
-
-}
-
-void unwrapImage_1(vect_handle_t vec_in, char* out){
-    vect_handle_t vT;
-    for(uint8_t i = (vec_in->len)/2; i < vec_in->len; i++){
-        vT = (vect_t *) vect_read(vec_in,i);
-        for(uint8_t j = 0; j < vT->len; j++){
-            char val = *(char *) vect_read(vT,j);
-            uint16_t idx = i* (vT->len) + j;
-
-            out[idx] = val;
-            //memcpy(&out[idx], val, sizeof(char));
-            //printf("%d %d\t",idx, val);
-        }
-        //printf("\n");
-    }
-
 }
 
 void mapMatrix_0(vect_handle_t mat_in, vect_handle_t mat_out, void* (*f)(void*)){
@@ -257,6 +102,28 @@ void* grayscale_1(void* pin){
 
     float gray = ((float)(in->r) * 0.3125) + ((float)(in->g) * 0.5625) + ((float)(in->b) * 0.125);
     tmp = (char) gray;
+    //printf("%2.2f %d ", gray, tmp);
+
+    return &tmp;
+}
+
+void* grayscale_div4(void* pin){
+    pixel_t *in = (pixel_t *)pin;
+    static char tmp = 0;
+
+    float gray = ((float)(in->r) * 0.3125) + ((float)(in->g) * 0.5625) + ((float)(in->b) * 0.125);
+    tmp = (char) gray/4;
+    //printf("%2.2f %d ", gray, tmp);
+
+    return &tmp;
+}
+
+void* grayscale_div4_1(void* pin){
+    pixel_t *in = (pixel_t *)pin;
+    static char tmp = 0;
+
+    float gray = ((float)(in->r) * 0.3125) + ((float)(in->g) * 0.5625) + ((float)(in->b) * 0.125);
+    tmp = (char) gray/4;
     //printf("%2.2f %d ", gray, tmp);
 
     return &tmp;
@@ -352,6 +219,38 @@ void sumCols_sumRows_1(vect_handle_t vec_in, vect_handle_t vec_out){
 
 }
 
+/******************MULTI CORE SUPPORT*************************/
+
+typedef enum{
+    WRAP_IMAGE=0,
+    UNWRAP_IMAGE,
+    MAP_MATRIX,
+    SUMCOLS_SUMROWS
+} function_type_t;
+
+static void core1_entry() {
+    while (true) {
+        uintptr_t in_raw = multicore_fifo_pop_blocking();
+        char * in1 = (char *) in_raw;
+
+        wrapImageRGB_1(in1, &mRGB);
+
+        mapMatrix_1(&mRGB, &mGRY, grayscale_div4_1);
+
+        // sum columns and rows
+        sumCols_sumRows_1(&mGRY, &mRSZ);
+
+        mapMatrix_1(&mRSZ, &mASCII, convert_ascii_1);
+
+        //send finished (to be acknowledge by core0)
+        multicore_fifo_push_blocking(1);
+    }
+}
+
+
+
+/*************************************************************/
+
 char output;
 uint32_t tStart;
 uint32_t tStop;
@@ -408,71 +307,15 @@ int main()
         tStart = time_us_32();
 
         // de-serialize the data
-        function_type_t z = WRAP_IMAGE;
-        multicore_fifo_push_blocking(z);
-        multicore_fifo_push_blocking((uintptr_t)wrapImageRGB_1);
         multicore_fifo_push_blocking((uintptr_t)(char *)(uintptr_t) in);
-        multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mRGB);
 
         wrapImageRGB_0(in, &mRGB);
 
-        //acknowledge
-        multicore_fifo_pop_blocking();
-
-        // gray process
-        z = MAP_MATRIX;
-        multicore_fifo_push_blocking(z);
-        multicore_fifo_push_blocking((uintptr_t)mapMatrix_1);
-        multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mRGB);
-        multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mGRY);
-        multicore_fifo_push_blocking((uintptr_t)(void *)(uintptr_t) grayscale_1);
-
-        // mapMatrix operation with grayscale function on each element
-        //vect_t grayImage = mapV(&image,f_gray); 
-        //vect_t grayImage = mapMatrix(&image, grayscale); 
-        mapMatrix_0(&mRGB, &mGRY, grayscale);
-
-        //acknowledge
-        multicore_fifo_pop_blocking();
-
-        // div4 (resize process)
-        z = MAP_MATRIX;
-        multicore_fifo_push_blocking(z);
-        multicore_fifo_push_blocking((uintptr_t)mapMatrix_1);
-        multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mGRY);
-        multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mGRY);
-        multicore_fifo_push_blocking((uintptr_t)(void *)(uintptr_t) div_4_1);
-
-        // mapMatrix operation with grayscale function on each element
-        mapMatrix_0(&mGRY, &mGRY, div_4);
-
-        //acknowledge
-        multicore_fifo_pop_blocking();
-
-        // reduce (resize process)
-        z = SUMCOLS_SUMROWS;
-        multicore_fifo_push_blocking(z);
-        multicore_fifo_push_blocking((uintptr_t)sumCols_sumRows_1);
-        multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mGRY);
-        multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mRSZ);
+        mapMatrix_0(&mRGB, &mGRY, grayscale_div4);
 
         // sum columns and rows
         sumCols_sumRows_0(&mGRY, &mRSZ);
 
-        //acknowledge
-        multicore_fifo_pop_blocking();
-
-        // convert to ASCII
-        z = MAP_MATRIX;
-        multicore_fifo_push_blocking(z);
-        multicore_fifo_push_blocking((uintptr_t)mapMatrix_1);
-        multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mRSZ);
-        multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mASCII);
-        multicore_fifo_push_blocking((uintptr_t)(void *)(uintptr_t) convert_ascii_1);
-
-        // mapMatrix operation with grayscale function on each element
-        //vect_t grayImage = mapV(&image,f_gray); 
-        //vect_t grayImage = mapMatrix(&image, grayscale); 
         mapMatrix_0(&mRSZ, &mASCII, convert_ascii);
 
         //acknowledge
