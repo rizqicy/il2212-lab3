@@ -91,23 +91,25 @@ void* f_reduceV_example(void* pin1, void* pin2){
 
 
 /////////////////////////////
-vect_t groupV(vect_handle_t vec_in, int num){
-    int groups;
-    vect_t vec_out;
+void groupV(vect_handle_t vec_in, vect_handle_t mat_out){
+    vect_handle_t vT;
 
-    groups = vec_in->len / num;
-
-    vect_init(&vec_out,groups,sizeof(vect_t));
-
-    for(int i = 0; i < groups; i++){
-        vect_init(&((vect_t *) vec_out.data)[i],num,vec_in->type);
-        for(int j = 0; j < num; j++){
-            vect_write(&((vect_t *) vec_out.data)[i],j,vect_read(vec_in,i*num+j));
-        }
+    vT = (vect_t *) vect_read(mat_out, 0);
+    
+    int groups = vec_in->len / vT->len;
+    if(groups > mat_out->len){
+        groups = mat_out->len;
     }
 
-    return vec_out;
+    for(int i = 0; i < groups; i++){
+        vT = (vect_t *) vect_read(mat_out, i);
+        for(int j = 0; j < (vT->len); j++){
+            int idx = i * (vT->len) + j;
+            if(idx < (vec_in->len)){
+                vect_write(vT,j,vect_read(vec_in,idx));
+            }
+        }
+    }
 }
-
 
 
