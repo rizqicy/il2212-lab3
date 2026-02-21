@@ -177,14 +177,6 @@ char sobel_1(char *in, uint16_t index, uint8_t width, uint8_t height){
 
 /******************MULTI CORE SUPPORT*************************/
 
-typedef enum{
-    WRAP_IMAGE=0,
-    UNWRAP_IMAGE,
-    MAP_MATRIX,
-    SUMCOLS_SUMROWS
-} function_type_t;
-
-
 static void core1_entry() {
     while (true) {
         uintptr_t in_raw = multicore_fifo_pop_blocking();
