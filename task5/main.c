@@ -59,7 +59,9 @@ static void core1_entry() {
         uint16_t k=w/2 * h/2 /2;
         while(i < w*h*3){
 
+            //RGB to gray and resize operation simultaneously
             imgGRY[k] = gry_div4(in[i],in[i+1],in[i+2]) + gry_div4(in[i+3],in[i+4],in[i+5]) + gry_div4(in[i+w*3],in[i+1+w*3],in[i+2+w*3]) + gry_div4(in[i+3+w*3],in[i+4+w*3],in[i+5+w*3]);
+            //convert resized gray image to ascii image
             imgASCII[k] = to_ascii(imgGRY[k]);
 
             i += 6; //skip every 2 pixels
@@ -130,8 +132,9 @@ int main()
         uint16_t k=0;
         while(i < w*h/2*3){
 
+            //RGB to gray and resize operation simultaneously
             imgGRY[k] = gry_div4(in[i],in[i+1],in[i+2]) + gry_div4(in[i+3],in[i+4],in[i+5]) + gry_div4(in[i+w*3],in[i+1+w*3],in[i+2+w*3]) + gry_div4(in[i+3+w*3],in[i+4+w*3],in[i+5+w*3]);
-            
+            //convert resized gray image to ascii image
             imgASCII[k] = to_ascii(imgGRY[k]);
 
             i += 6; //skip every 2 pixels
