@@ -12,7 +12,6 @@
 #define PPM_WIDTH 32
 #define PPM_HEIGHT 32
 
-TaskHandle_t    blinkTsk; /* Handle for the LED task. */
 TaskHandle_t    graySDFTsk; /* Handle for graySDF task */
 TaskHandle_t    asciiSDFTsk; /* Handle for asciiSDF task. */
 QueueHandle_t   s_in;
@@ -221,7 +220,6 @@ int main()
     BSP_Init();             /* Initialize all components on the lab-kit. */
     
     /* Create the tasks. */
-    //xTaskCreate(blink_task, "Blink Task", 512, (void*) 1000, 2, &blinkTsk);
     xTaskCreate(graySDF_task, "graySDF Task", 2048, (void*) 3000, 2, &graySDFTsk);
     xTaskCreate(asciiSDF_task, "asciiSDF Task", 2048, (void*) 3000, 2, &asciiSDFTsk);
 
@@ -292,10 +290,6 @@ void graySDF_task(void *args){
         uint8_t h = sequence1[img_id][1];
         uint8_t max_val = sequence1[img_id][2];
         
-        // for(uint16_t i = 0; i < (3*w*h); i++){
-        //     xQueueSend(s_in, &sequence1[img_id][i+3], (TickType_t) portMAX_DELAY);
-        // }
-        //time_start = xTaskGetTickCount();
         tStart = time_us_32();
 
         /* Read input tokens */
@@ -306,7 +300,7 @@ void graySDF_task(void *args){
         /* graySDF actor */
         actor11SDF(3*w*h, w*h, &s_in, &s_1, f_grayscale, w, h);
         tStop = time_us_32();
-        //printf("st=%d\t", time_start);
+
         printf("T1 diff=%.3f\t", (tStop-tStart)/1000.0f);
         img_id++;
     }
@@ -330,24 +324,19 @@ void asciiSDF_task(void *args){
         /* asciiSDF actor */
         actor11SDF(w*h, w*h, &s_1, &s_out, f_ascii, w, h);
 
-        //time_stop = xTaskGetTickCount();
-        //printf("sp=%d\n", time_stop);
-
         tStop = time_us_32();
         printf("T2 diff=%.3f\n", (tStop-tStart)/1000.0f);
-        //xQueueReceive(s_out, &c, (TickType_t) portMAX_DELAY);
-        //printf("%d ",c);
 
         /* Write output tokens */
-        //printf("Output:\n");
+        // printf("Output:\n");
         for(uint16_t j = 0; j<h; j++) {
             for(uint16_t i = 0; i < w; i++){
                 readToken(s_out, &output);
-                //printf("%c", output);
+                // printf("%c", output);
             }
-            //printf("\n");
+            // printf("\n");
         }
-        //printf("\n");
+        // printf("\n");
 
     }
 }

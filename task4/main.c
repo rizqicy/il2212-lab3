@@ -95,9 +95,6 @@ static void core1_entry() {
 uint8_t NR_ASCII_CHARS = 16;
 char ascii[] = {' ','.',':','-','=','+','/','t','z','U','w','*','0','#','%','@'};
 
-/* Definition of the channel */
-//typedef cbuf_handle_t channel;
-
 /* global variable matrix(s)*/
 vect_t mRGB;
 vect_t mGRY1;
@@ -487,29 +484,13 @@ static void f_grayscale(char* in, char* out) {
     multicore_fifo_push_blocking((uintptr_t)(void *)(uintptr_t) grayscale_1);
 
     // mapMatrix operation with grayscale function on each element
-    //vect_t grayImage = mapV(&image,f_gray); 
-    //vect_t grayImage = mapMatrix(&image, grayscale); 
     mapMatrix_0(&mRGB, &mGRY1, grayscale);
 
     //acknowledge
     multicore_fifo_pop_blocking();
 
-    // Send task to core1
-    // z = UNWRAP_IMAGE;
-    // multicore_fifo_push_blocking(z);
-    // multicore_fifo_push_blocking((uintptr_t)unwrapImage_1);
-    // multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mGRY1);
-    // multicore_fifo_push_blocking((uintptr_t)(char *)(uintptr_t) out);
-
-    //sleep_us(200);
-
     //write matrix to data stream
     unwrapImage(&mGRY1, out);
-
-    //acknowledge
-   // multicore_fifo_pop_blocking();
-
-    //printf("%d %d %d\n",x,y,w);
 }
 
 
@@ -546,9 +527,6 @@ static void f_ascii(char* in, char* out) {
     //acknowledge
     multicore_fifo_pop_blocking();
 
-    // mapMatrix operation with convert_ascii function on each element
-    //vect_t asciiImage = mapMatrix(&grayImage, convert_ascii); 
-
     // Send task to core1
     z = MAP_MATRIX;
     multicore_fifo_push_blocking(z);
@@ -557,9 +535,7 @@ static void f_ascii(char* in, char* out) {
     multicore_fifo_push_blocking((uintptr_t)(vect_handle_t)(uintptr_t) &mASCII);
     multicore_fifo_push_blocking((uintptr_t)(void *)(uintptr_t) convert_ascii_1);
 
-    // mapMatrix operation with grayscale function on each element
-    //vect_t grayImage = mapV(&image,f_gray); 
-    //vect_t grayImage = mapMatrix(&image, grayscale); 
+    // mapMatrix operation with convert_ascii on each element
     mapMatrix_0(&mRSZ2, &mASCII, convert_ascii);
 
     //acknowledge
@@ -720,7 +696,7 @@ int main()
         actor11SDF(w*h/4, w*h/4, &s_2, &s_out, f_ascii);
 
         tStop = time_us_32();
-        printf("T diff=%.3f\n", tStop, (tStop-tStart)/1000.0f);
+        printf("T diff=%.3f\n", (tStop-tStart)/1000.0f);
 
         /* Write output tokens */
         printf("Output:\n");

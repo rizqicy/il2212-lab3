@@ -19,9 +19,6 @@ queue_t   s_out;
 uint8_t NR_ASCII_CHARS = 16;
 char ascii[] = {' ','.',':','-','=','+','/','t','z','U','w','*','0','#','%','@'};
 
-/* Definition of the channel */
-//typedef cbuf_handle_t channel;
-
 /* global variable matrix(s)*/
 vect_t mRGB;
 vect_t mGRY1;
@@ -266,15 +263,15 @@ int main()
         printf("T diff=%.3f\n", (tStop-tStart)/1000.0f);
 
         /* Write output tokens */
-        // printf("Output:\n");
+        printf("Output:\n");
         for(uint16_t j = 0; j<h; j++) {
             for(uint16_t i = 0; i < w; i++){
                 readToken(&s_out, &output);
-                // printf("%c", output);
+                printf("%c", output);
             }
-            // printf("\n");
+            printf("\n");
         }
-        // printf("\n");
+        printf("\n");
 
         //sleep_ms(1000); 
         img_id++;

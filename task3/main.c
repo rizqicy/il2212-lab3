@@ -20,9 +20,6 @@ queue_t   s_out;
 uint8_t NR_ASCII_CHARS = 16;
 char ascii[] = {' ','.',':','-','=','+','/','t','z','U','w','*','0','#','%','@'};
 
-/* Definition of the channel */
-//typedef cbuf_handle_t channel;
-
 /* global variable matrix(s)*/
 vect_t mRGB;
 vect_t mGRY1;
@@ -356,7 +353,7 @@ int main()
         actor11SDF(w*h/4, w*h/4, &s_2, &s_out, f_ascii, w/2, h/2);
 
         tStop = time_us_32();
-        // printf("T diff=%.3f\n", tStop, (tStop-tStart)/1000.0f);
+        printf("T diff=%.3f\n", (tStop-tStart)/1000.0f);
 
         /* Write output tokens */
         printf("Output:\n");

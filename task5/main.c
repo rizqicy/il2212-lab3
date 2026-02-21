@@ -148,7 +148,7 @@ int main()
         multicore_fifo_pop_blocking();
 
         tStop = time_us_32();
-        printf("T diff=%.3f\n", tStop, (tStop-tStart)/1000.0f);
+        printf("T diff=%.3f\n", (tStop-tStart)/1000.0f);
 
         /* PRINT RESULT */
         printf("Output:\n");
