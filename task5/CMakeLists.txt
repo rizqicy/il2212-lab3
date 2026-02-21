@@ -38,7 +38,7 @@ message(BSP_SOURCES="${BSP_SOURCES}")
 
 # Add executable. Default name is the project name, version 0.1
 include_directories(../../bsp) # Add include files for the bsp
-add_executable(task5 main.c vector.c skeleton_v2.c ${BSP_SOURCES})
+add_executable(task5 main.c ${BSP_SOURCES})
 
 pico_set_program_name(task5 "task5")
 pico_set_program_version(task5 "0.1")

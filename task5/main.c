@@ -1,9 +1,8 @@
 #include <stdio.h>
 #include "bsp.h"
 #include "images_alt.h"
-#include "vector.h"
-#include "skeleton_v2.h"
 #include <pico/multicore.h>
+#include <stdlib.h>  // add malloc support
 
 #define PPM_WIDTH 32
 #define PPM_HEIGHT 32
@@ -16,207 +15,20 @@
 uint8_t NR_ASCII_CHARS = 16;
 char ascii[] = {' ','.',':','-','=','+','/','t','z','U','w','*','0','#','%','@'};
 
-/* global variable matrix(s)*/
-vect_t mRGB;
-vect_t mGRY;
-vect_t mRSZ;
-vect_t mASCII;
 
-void wrapImageRGB_0(char* in, vect_handle_t vec_out){
-    vect_handle_t vT;
-
-    for(uint8_t i = 0; i < (vec_out->len)/2; i++){
-        //printf("h=%d | ", i);
-        vT = (vect_t *) vect_read(vec_out, i);
-        for(uint8_t j = 0; j < (vT->len); j++){
-            uint16_t idx = (i * (vT->len) + j)*3;
-            pixel_t p = {in[idx], in[idx+1], in[idx+2]};
-            vect_write(vT, j, &p);
-            //printf("%d,%d,%d\t",p.r,p.g,p.b);
-        }
-        //printf("\n");
-    }
-}
-
-void wrapImageRGB_1(char* in, vect_handle_t vec_out){
-    vect_handle_t vT;
-
-    for(uint8_t i = (vec_out->len)/2; i < (vec_out->len); i++){
-        //printf("h=%d | ", i);
-        vT = (vect_t *) vect_read(vec_out, i);
-        for(uint8_t j = 0; j < (vT->len); j++){
-            uint16_t idx = (i * (vT->len) + j)*3;
-            pixel_t p = {in[idx], in[idx+1], in[idx+2]};
-            vect_write(vT, j, &p);
-            //printf("%d,%d,%d\t",p.r,p.g,p.b);
-        }
-        //printf("\n");
-    }
-}
-
-void mapMatrix_0(vect_handle_t mat_in, vect_handle_t mat_out, void* (*f)(void*)){
-    vect_handle_t vT;
-
-    for(int i=0; i < (mat_in->len)/2; i++){
-        vT = (vect_t *)vect_read(mat_in,i);
-        for(int j=0; j < (vT->len); j++){
-            //pixel_t a = *(pixel_t *) vect_read(&temp,j);
-            //int sum = a.r + a.g + a.b;
-            //printf("j=%d,%d,%d,%d,%d\t",j,a.r,a.g,a.b, sum);
-            vect_write(&((vect_t *) mat_out->data)[i],j, f(vect_read(vT,j)));
-            //vect_write(&vec_out, i, f(vect_read(vec_in,i)));
-        }
-   }
-}
-
-
-void mapMatrix_1(vect_handle_t mat_in, vect_handle_t mat_out, void* (*f)(void*)){
-    vect_handle_t vT;
-
-    for(int i=(mat_in->len)/2; i < (mat_in->len); i++){
-        vT = (vect_t *)vect_read(mat_in,i);
-        for(int j=0; j < (vT->len); j++){
-            //pixel_t a = *(pixel_t *) vect_read(&temp,j);
-            //int sum = a.r + a.g + a.b;
-            //printf("j=%d,%d,%d,%d,%d\t",j,a.r,a.g,a.b, sum);
-            vect_write(&((vect_t *) mat_out->data)[i],j, f(vect_read(vT,j)));
-            //vect_write(&vec_out, i, f(vect_read(vec_in,i)));
-        }
-   }
-}
-
-void* grayscale(void* pin){
-    pixel_t *in = (pixel_t *)pin;
-    static char tmp = 0;
-
-    float gray = ((float)(in->r) * 0.3125) + ((float)(in->g) * 0.5625) + ((float)(in->b) * 0.125);
-    tmp = (char) gray;
-    //printf("%2.2f %d ", gray, tmp);
-
-    return &tmp;
-}
-
-void* grayscale_1(void* pin){
-    pixel_t *in = (pixel_t *)pin;
-    static char tmp = 0;
-
-    float gray = ((float)(in->r) * 0.3125) + ((float)(in->g) * 0.5625) + ((float)(in->b) * 0.125);
-    tmp = (char) gray;
-    //printf("%2.2f %d ", gray, tmp);
-
-    return &tmp;
-}
-
-void* grayscale_div4(void* pin){
-    pixel_t *in = (pixel_t *)pin;
-    static char tmp = 0;
-
-    float gray = ((float)(in->r) * 0.3125) + ((float)(in->g) * 0.5625) + ((float)(in->b) * 0.125);
+char gry_div4(char r, char g, char b){
+    char tmp;
+    float gray = ((float)(r) * 0.3125) + ((float)(g) * 0.5625) + ((float)(b) * 0.125);
     tmp = (char) gray/4;
-    //printf("%2.2f %d ", gray, tmp);
 
-    return &tmp;
+    return tmp;
 }
 
-void* grayscale_div4_1(void* pin){
-    pixel_t *in = (pixel_t *)pin;
-    static char tmp = 0;
-
-    float gray = ((float)(in->r) * 0.3125) + ((float)(in->g) * 0.5625) + ((float)(in->b) * 0.125);
-    tmp = (char) gray/4;
-    //printf("%2.2f %d ", gray, tmp);
-
-    return &tmp;
-}
-
-void* convert_ascii(void* pin){
-    char *in = (char *)pin;
-    static char tmp = 0;
-
-    uint8_t idx = *in * (NR_ASCII_CHARS-1) / 255;
-    tmp = ascii[idx];
-
-    return &tmp;
-}
-
-void* convert_ascii_1(void* pin){
-    char *in = (char *)pin;
-    static char tmp = 0;
-
-    uint8_t idx = *in * (NR_ASCII_CHARS-1) / 255;
-    tmp = ascii[idx];
-
-    return &tmp;
-}
-
-void* f_sum (void* pin1,void* pin2){
-    char *in1 = (char *)pin1;
-    char *in2 = (char *)pin2;
-    static char tmp = 0;     //temporary memory
-
-    tmp = *in1 + *in2;
-    return &tmp;
-}
-
-void* f_sum_1 (void* pin1,void* pin2){
-    char *in1 = (char *)pin1;
-    char *in2 = (char *)pin2;
-    static char tmp = 0;     //temporary memory
-
-    tmp = *in1 + *in2;
-    return &tmp;
-}
-
-void* div_4(void* pin){
-    char* in = (char *) pin;
-    static char tmp =0;
-
-    tmp = *in/4;
-
-    return &tmp;
-}
-
-void* div_4_1(void* pin){
-    char* in = (char *) pin;
-    static char tmp =0;
-
-    tmp = *in/4;
-
-    return &tmp;
-}
-
-void sumCols_sumRows_0(vect_handle_t vec_in, vect_handle_t vec_out){
-    vect_handle_t vM0, vM1, vR;
-    for(uint8_t i =0; i< (vec_in->len)/2; i+=2){
-        vM0 = (vect_t *) vect_read(vec_in,i);
-        vM1 = (vect_t *) vect_read(vec_in,i+1);
-
-        zipWithV(vM0,vM1, vM0, f_sum);
-
-        vR = (vect_t *) vect_read(vec_out, i/2);
-        for(uint8_t j = 0; j< vM0->len; j+=2){
-            char sum = *(char *)vect_read(vM0,j) + *(char *)vect_read(vM0,j+1);
-            vect_write(vR, j/2, &sum);
-        }
-    }
-
-}
-
-void sumCols_sumRows_1(vect_handle_t vec_in, vect_handle_t vec_out){
-    vect_handle_t vM0, vM1, vR;
-    for(uint8_t i =(vec_in->len)/2; i< (vec_in->len); i+=2){
-        vM0 = (vect_t *) vect_read(vec_in,i);
-        vM1 = (vect_t *) vect_read(vec_in,i+1);
-
-        zipWithV(vM0,vM1, vM0, f_sum_1);
-
-        vR = (vect_t *) vect_read(vec_out, i/2);
-        for(uint8_t j = 0; j< vM0->len; j+=2){
-            char sum = *(char *)vect_read(vM0,j) + *(char *)vect_read(vM0,j+1);
-            vect_write(vR, j/2, &sum);
-        }
-    }
-
+char to_ascii(char in){
+    char tmp;
+    uint16_t idx = in * (NR_ASCII_CHARS-1) / 255;
+    tmp = (char) idx;
+    return ascii[tmp];
 }
 
 /******************MULTI CORE SUPPORT*************************/
@@ -231,16 +43,31 @@ typedef enum{
 static void core1_entry() {
     while (true) {
         uintptr_t in_raw = multicore_fifo_pop_blocking();
-        char * in1 = (char *) in_raw;
+        char * in = (char *) in_raw;
 
-        wrapImageRGB_1(in1, &mRGB);
+        uint8_t w = (uint8_t) multicore_fifo_pop_blocking();
 
-        mapMatrix_1(&mRGB, &mGRY, grayscale_div4_1);
+        uint8_t h = (uint8_t) multicore_fifo_pop_blocking();
 
-        // sum columns and rows
-        sumCols_sumRows_1(&mGRY, &mRSZ);
+        uintptr_t gry_raw = multicore_fifo_pop_blocking();
+        char * imgGRY = (char *) gry_raw;
 
-        mapMatrix_1(&mRSZ, &mASCII, convert_ascii_1);
+        uintptr_t ascii_raw = multicore_fifo_pop_blocking();
+        char * imgASCII = (char *) ascii_raw;
+
+        uint16_t i=w*h/2*3;
+        uint16_t k=w/2 * h/2 /2;
+        while(i < w*h*3){
+
+            imgGRY[k] = gry_div4(in[i],in[i+1],in[i+2]) + gry_div4(in[i+3],in[i+4],in[i+5]) + gry_div4(in[i+w*3],in[i+1+w*3],in[i+2+w*3]) + gry_div4(in[i+3+w*3],in[i+4+w*3],in[i+5+w*3]);
+            imgASCII[k] = to_ascii(imgGRY[k]);
+
+            i += 6; //skip every 2 pixels
+            if(i % (w*3) == 0) { //finished one row of image, skip next row due to resize
+                i += w*3;
+            }
+            k++;
+        }
 
         //send finished (to be acknowledge by core0)
         multicore_fifo_push_blocking(1);
@@ -269,25 +96,11 @@ int main()
     uint8_t width = PPM_WIDTH;
     uint8_t height = PPM_HEIGHT;
 
-    vect_init(&mRGB,height,sizeof(vect_t));
-    for(int i = 0; i < height; i++){
-        vect_init(&((vect_t *) mRGB.data)[i], width, sizeof(pixel_t));
-    }    
+    char* imgGRY;
+    char* imgASCII;
 
-    vect_init(&mGRY,height,sizeof(vect_t));
-    for(int i = 0; i < height; i++){
-        vect_init(&((vect_t *) mGRY.data)[i], width, sizeof(char));
-    }
-
-    vect_init(&mRSZ,height/2,sizeof(vect_t));
-    for(int i = 0; i < height/2; i++){
-        vect_init(&((vect_t *) mRSZ.data)[i], width/2, sizeof(char));
-    }
-
-    vect_init(&mASCII,height/2,sizeof(vect_t));
-    for(int i = 0; i < height/2; i++){
-        vect_init(&((vect_t *) mASCII.data)[i], width/2, sizeof(char));
-    }
+    imgGRY = malloc(width*height/4*sizeof(char));
+    imgASCII = malloc(width*height/4*sizeof(char));
 
     uint8_t img_id = 0;
 
@@ -306,17 +119,27 @@ int main()
         
         tStart = time_us_32();
 
-        // de-serialize the data
+        // send data to core1
         multicore_fifo_push_blocking((uintptr_t)(char *)(uintptr_t) in);
+        multicore_fifo_push_blocking(w);
+        multicore_fifo_push_blocking(h);
+        multicore_fifo_push_blocking((uintptr_t)(char *)(uintptr_t) imgGRY);
+        multicore_fifo_push_blocking((uintptr_t)(char *)(uintptr_t) imgASCII);
 
-        wrapImageRGB_0(in, &mRGB);
+        uint16_t i=0;
+        uint16_t k=0;
+        while(i < w*h/2*3){
 
-        mapMatrix_0(&mRGB, &mGRY, grayscale_div4);
+            imgGRY[k] = gry_div4(in[i],in[i+1],in[i+2]) + gry_div4(in[i+3],in[i+4],in[i+5]) + gry_div4(in[i+w*3],in[i+1+w*3],in[i+2+w*3]) + gry_div4(in[i+3+w*3],in[i+4+w*3],in[i+5+w*3]);
+            
+            imgASCII[k] = to_ascii(imgGRY[k]);
 
-        // sum columns and rows
-        sumCols_sumRows_0(&mGRY, &mRSZ);
-
-        mapMatrix_0(&mRSZ, &mASCII, convert_ascii);
+            i += 6; //skip every 2 pixels
+            if(i % (w*3) == 0) { //finished one row of image, skip next row due to resize
+                i += w*3;
+            }
+            k++;
+        }
 
         //acknowledge
         multicore_fifo_pop_blocking();
@@ -326,10 +149,9 @@ int main()
 
         /* PRINT RESULT */
         printf("Output:\n");
-        for(uint16_t j = 0; j< mASCII.len; j++) {
-            vect_handle_t v = (vect_t *) vect_read(&mASCII, j);
-            for(uint16_t i = 0; i < (v->len); i++){
-                output = *(char *)vect_read(v, i); 
+        for(uint16_t j = 0; j< h/2; j++) {
+            for(uint16_t i = 0; i < w/2; i++){
+                output = imgASCII[j*w/2 + i];
                 printf("%c", output);
             }
             printf("\n");
