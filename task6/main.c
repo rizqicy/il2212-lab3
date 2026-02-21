@@ -76,54 +76,6 @@ char correction(uint8_t min_brightness, uint8_t max_brightness, char in){
     }
 }
 
-
-int16_t sobel(char *in, uint16_t index, uint8_t width, uint8_t height){
-    int8_t k_x[]= {1,0,-1,2,0,-2,1,0,-1}; //sobel kernel X
-    int8_t k_y[]= {1,2,1,0,0,0,-1,-2,-1}; //sobel kernel X
-
-    uint8_t a,b,c,d,e,f,g,h,i;
-
-    a = in[index-width-1];
-    b = in[index-width];
-    c = in[index-width+1];
-
-    d = in[index-1];
-    e = in[index];
-    f = in[index+1];
-
-    g = in[index+width-1];
-    h = in[index+width];
-    i = in[index+width+1];
-
-    if(index < width){ //edge top
-       a = 0;
-       b = 0;
-       c = 0; 
-    }
-    if((index % width) == 0){   //edge left
-        a = 0;
-        d = 0;
-        g = 0;
-    }
-    if((index % width) == (width-1)){   //edge right
-        c = 0;
-        f = 0;
-        i = 0;
-    }
-    if((index/width) == (height-1)){     //edge bottom
-        g = 0;
-        h = 0;
-        i = 0;
-    }
-
-    int16_t gx = a*k_x[0] + c*k_x[2] + d*k_x[3] + f*k_x[5] + g*k_x[6] + i*k_x[8];
-    int16_t gy = a*k_y[0] + b*k_y[1] + c*k_y[2] + g*k_y[6] + h*k_y[7] + i*k_y[8];
-
-    return (char) sqrt(gx*gx + gy*gy) / 4;
-}
-
-
-
 /******************MULTI CORE SUPPORT*************************/
 
 typedef enum{
@@ -145,16 +97,17 @@ static void core1_entry() {
         uintptr_t gry_raw = multicore_fifo_pop_blocking();
         char * imgGRY = (char *) gry_raw;
 
-        uintptr_t ascii_raw = multicore_fifo_pop_blocking();
-        char * imgASCII = (char *) ascii_raw;
-
         uint16_t i=w*h/2*3;
         uint16_t k=w/2 * h/2 /2;
+        uint8_t min=255;
+        uint8_t max=0;
         while(i < w*h*3){
 
             imgGRY[k] = gry_div4(in[i],in[i+1],in[i+2]) + gry_div4(in[i+3],in[i+4],in[i+5]) + gry_div4(in[i+w*3],in[i+1+w*3],in[i+2+w*3]) + gry_div4(in[i+3+w*3],in[i+4+w*3],in[i+5+w*3]);
             
-            imgASCII[k] = to_ascii(imgGRY[k]);
+            //brightness actor
+            if (imgGRY[k] < min)    min = imgGRY[k];
+            if (imgGRY[k] > max)    max = imgGRY[k];
 
             i += 6; //skip every 2 pixels
             if(i % (w*3) == 0) { //finished one row of image, skip next row due to resize
@@ -164,6 +117,35 @@ static void core1_entry() {
         }
 
         //send finished (to be acknowledge by core0)
+        multicore_fifo_push_blocking(min);
+        multicore_fifo_push_blocking(max);
+
+        //receive data from core0
+        //uint8_t half_w = (uint8_t) multicore_fifo_pop_blocking();
+        //uint8_t half_h = (uint8_t) multicore_fifo_pop_blocking();
+
+        uintptr_t ascii_raw = multicore_fifo_pop_blocking();
+        char * imgASCII = (char *) ascii_raw;
+
+        bool ctrl = (bool) multicore_fifo_pop_blocking();
+
+        uint8_t half_w = w/2;
+        uint8_t half_h = h/2;
+
+        k = half_w * half_h/2;
+        while(k < half_w * half_h){
+            
+            //correction operation
+            if(ctrl){
+                imgGRY[k] = correction(min, max, imgGRY[k]);         
+            }
+
+            //convert corrected image to ascii image
+            imgASCII[k] = to_ascii(imgGRY[k]);
+
+            k++;
+        }
+
         multicore_fifo_push_blocking(1);
     }
 }
@@ -198,7 +180,7 @@ int main()
 
     uint8_t img_id = 0;
 
-    //multicore_launch_core1(core1_entry);
+    multicore_launch_core1(core1_entry);
     
     while (true) { 
         //BSP_ToggleLED(LED_GREEN);
@@ -217,17 +199,16 @@ int main()
         tStart = time_us_32();
 
         // send data to core1
-        // multicore_fifo_push_blocking((uintptr_t)(char *)(uintptr_t) in);
-        // multicore_fifo_push_blocking(w);
-        // multicore_fifo_push_blocking(h);
-        // multicore_fifo_push_blocking((uintptr_t)(char *)(uintptr_t) imgGRY);
-        // multicore_fifo_push_blocking((uintptr_t)(char *)(uintptr_t) imgASCII);
+        multicore_fifo_push_blocking((uintptr_t)(char *)(uintptr_t) in);
+        multicore_fifo_push_blocking(w);
+        multicore_fifo_push_blocking(h);
+        multicore_fifo_push_blocking((uintptr_t)(char *)(uintptr_t) imgGRY);
 
         uint16_t i=0;
         uint16_t k=0;
         uint8_t min=255;
         uint8_t max=0;
-        while(i < w*h*3){
+        while(i < w*h/2*3){
 
             //RGB to gray and resize operation simultaneously
             imgGRY[k] = gry_div4(in[i],in[i+1],in[i+2]) + gry_div4(in[i+3],in[i+4],in[i+5]) + gry_div4(in[i+w*3],in[i+1+w*3],in[i+2+w*3]) + gry_div4(in[i+3+w*3],in[i+4+w*3],in[i+5+w*3]);
@@ -243,13 +224,23 @@ int main()
             k++;
         }
 
-        //acknowledge
-        // multicore_fifo_pop_blocking();
+        //acknowledge and receive (max,min) brightness from core1
+        uint8_t min2 = (uint8_t) multicore_fifo_pop_blocking();
+        uint8_t max2 = (uint8_t) multicore_fifo_pop_blocking();
 
+        // update min and max based on core1 data
+        if(min2 < min)  min = min2;
+        if(max2 > max)  max = max2;
 
+        // control signal for correction
         bool ctrl = controlActor(min, max);
+
+        //send data to core1
+        multicore_fifo_push_blocking((uintptr_t)(char *)(uintptr_t) imgASCII);
+        multicore_fifo_push_blocking(ctrl);
+
         k = 0;
-        while(k < half_w * half_h){
+        while(k < half_w * half_h/2){
             
             //correction operation
             if(ctrl){
@@ -262,9 +253,11 @@ int main()
             k++;
         }
 
+        //acknowledge
+        multicore_fifo_pop_blocking();
 
         tStop = time_us_32();
-        printf("T diff=%.3f\n", tStop, (tStop-tStart)/1000.0f);
+        printf("T diff=%.3f\n", (tStop-tStart)/1000.0f);
 
         /* PRINT RESULT */
         printf("Output:\n");
