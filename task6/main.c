@@ -78,13 +78,6 @@ char correction(uint8_t min_brightness, uint8_t max_brightness, char in){
 
 /******************MULTI CORE SUPPORT*************************/
 
-typedef enum{
-    WRAP_IMAGE=0,
-    UNWRAP_IMAGE,
-    MAP_MATRIX,
-    SUMCOLS_SUMROWS
-} function_type_t;
-
 static void core1_entry() {
     while (true) {
         uintptr_t in_raw = multicore_fifo_pop_blocking();
@@ -121,9 +114,6 @@ static void core1_entry() {
         multicore_fifo_push_blocking(max);
 
         //receive data from core0
-        //uint8_t half_w = (uint8_t) multicore_fifo_pop_blocking();
-        //uint8_t half_h = (uint8_t) multicore_fifo_pop_blocking();
-
         uintptr_t ascii_raw = multicore_fifo_pop_blocking();
         char * imgASCII = (char *) ascii_raw;
 
@@ -146,6 +136,7 @@ static void core1_entry() {
             k++;
         }
 
+        //send finished (to be acknowledge by core0)
         multicore_fifo_push_blocking(1);
     }
 }
